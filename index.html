@@ -65,7 +65,7 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 .v .top{padding:.6rem .8rem;display:flex;gap:.5rem;align-items:center;border-bottom:1px solid var(--line);padding-top:max(.6rem,env(safe-area-inset-top))}
 .v .top span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .v .stage{flex:1;min-height:0;background:#000;position:relative}
-.v .stage img,.v .stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;object-fit:contain}
+.v .stage img,.v .stage iframe,.v .stage video{position:absolute;inset:0;width:100%;height:100%;border:0;object-fit:contain}
 .v .acts{display:flex;gap:.5rem;padding:.7rem .8rem;padding-bottom:max(.7rem,env(safe-area-inset-bottom));flex-wrap:wrap}
 .v .acts button{flex:1;white-space:nowrap}
 #toast{position:fixed;left:50%;bottom:calc(5.5rem + env(safe-area-inset-bottom,0));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:.6rem 1rem;border-radius:var(--r);z-index:20;max-width:90vw}
@@ -86,7 +86,7 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <div id="app" class="hide">
   <header>
     <div class="row">
-      <h1>Galeri Drive <small style="font-weight:400;color:var(--muted);font-size:.7rem">v7</small></h1>
+      <h1>Galeri Drive <small style="font-weight:400;color:var(--muted);font-size:.7rem">v8</small></h1>
       <button id="btnLogout">Keluar</button>
     </div>
     <div class="row" style="margin-top:.6rem">
@@ -220,7 +220,7 @@ function openItem(f){
   $("#vDate").textContent=f.modifiedTime?"Diubah "+new Date(f.modifiedTime).toLocaleString("id-ID",{dateStyle:"medium",timeStyle:"short"}):"";
   const cp=f.capabilities||{}; $("#aRen").disabled=!cp.canRename; $("#aDel").disabled=!cp.canTrash;
   const s=$("#stage");
-  if(f.mimeType.startsWith("video/")) s.innerHTML=`<iframe src="https://drive.google.com/file/d/${f.id}/preview" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+  if(f.mimeType.startsWith("video/")) playVideo(f,s);
   else s.innerHTML=f.thumbnailLink?`<img referrerpolicy="no-referrer" src="${esc(f.thumbnailLink.replace(/=s\d+$/,"=s1600"))}" alt="${esc(f.name)}">`:"";
   $("#dlg").showModal();
 }
@@ -401,6 +401,17 @@ function flatMore(){
   done=flatPos>=flatList.length;
   $("#status").textContent = done&&!$("#grid").children.length ? "Tidak ada foto atau video yang cocok." : "";
   setTimeout(()=>{ if(!done && $("#sentinel").getBoundingClientRect().top < innerHeight+600) load(); },0);
+}
+
+// ---- Pemutar video bawaan browser (responsif di HP); cadangan: pemutar Drive ----
+function playVideo(f,s){
+  s.innerHTML="";
+  const v=document.createElement("video");
+  v.controls=true; v.playsInline=true; v.preload="metadata"; v.style.background="#000";
+  if(f.thumbnailLink) v.poster=f.thumbnailLink.replace(/=s\d+$/,"=s1000");
+  v.src=API+"/"+f.id+"?alt=media&access_token="+encodeURIComponent(token);
+  v.onerror=()=>{ s.innerHTML=`<iframe src="https://drive.google.com/file/d/${f.id}/preview" allow="autoplay; fullscreen" allowfullscreen></iframe>`; toast("Format video ini tidak didukung pemutar bawaan, memakai pemutar Drive"); };
+  s.appendChild(v);
 }
 </script>
 </body>
