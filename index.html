@@ -180,7 +180,7 @@ function query(){
   const flat = prefs.mode==="flat";
   let q = "trashed=false and (("+m+")"+(flat?"":" or mimeType='"+FOLD+"'")+")";
   if(term) q += " and name contains '"+term.replace(/\\/g,"\\\\").replace(/'/g,"\\'")+"'";
-  else if(flat) q += path[0].id==="shared" ? " and sharedWithMe=true" : " and 'me' in owners";
+  else if(flat) q += path[0].id==="shared" ? " and not 'me' in owners" : " and 'me' in owners";
   else if(here()==="shared") q += " and sharedWithMe=true";
   else q += " and '"+here()+"' in parents";
   return q;
@@ -195,7 +195,7 @@ async function load(){
     if(g!==gen) return;
     d.files.forEach(addTile); next=d.nextPageToken||null; done=!next;
     $("#status").textContent = done ? ($("#grid").children.length ? "" : (term ? "Tidak ada hasil." : "Folder ini kosong.")) : "";
-  }catch(e){ $("#status").textContent="Gagal memuat. Coba muat ulang halaman."; }
+  }catch(e){ $("#status").textContent="Gagal memuat"+(e.status?" (kode "+e.status+")":"")+". Coba muat ulang halaman."; }
   loading=false;
 }
 function addTile(f){
