@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Galeri Drive Saya</title>
+<style>
+:root{
+  --bg:#f3f1ec; --surface:#ffffff; --ink:#1d2327; --muted:#69737a; --line:#dcd8cf;
+  --accent:#1f5c4d; --accent-ink:#ffffff; --danger:#b3372b;
+  --r:10px;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#14181a;--surface:#1d2326;--ink:#e8ecec;--muted:#8f9a9e;--line:#2c3539;--accent:#6fc2a8;--accent-ink:#0f1a16;--danger:#ef8579}
+}
+*{box-sizing:border-box;margin:0}
+html,body{background:var(--bg);color:var(--ink);font:16px/1.45 "Segoe UI",system-ui,-apple-system,sans-serif}
+body{padding-top:env(safe-area-inset-top,0);padding-bottom:env(safe-area-inset-bottom,0)}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:.55rem .9rem;min-height:42px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+button.danger{color:var(--danger);border-color:var(--danger)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:.7rem .9rem}
+.row{display:flex;gap:.5rem;align-items:center}
+h1{font-size:1.15rem;font-weight:700;flex:1}
+#search{flex:1;min-width:0;padding:.55rem .8rem;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);min-height:42px}
+.tabs{display:flex;gap:.4rem;margin-top:.6rem}
+.tabs button{flex:1;padding:.4rem}
+.tabs button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+main{padding:.9rem}
+#login{max-width:420px;margin:12vh auto;text-align:center;display:grid;gap:1rem}
+#login p{color:var(--muted)}
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px}
+.item{position:relative;aspect-ratio:1;background:var(--line);border-radius:6px;overflow:hidden;padding:0;min-height:0;border:0}
+.item img{width:100%;height:100%;object-fit:cover;display:block}
+.item .tag{position:absolute;left:4px;bottom:4px;background:rgba(0,0,0,.65);color:#fff;border-radius:4px;font-size:.7rem;padding:1px 6px}
+.item .nm{position:absolute;inset:0;display:grid;place-items:center;padding:.4rem;font-size:.75rem;color:var(--muted);word-break:break-all}
+.crumbs{display:flex;gap:.25rem;align-items:center;overflow-x:auto;white-space:nowrap;margin-top:.6rem;scrollbar-width:none}
+.crumbs button{min-height:34px;padding:.2rem .7rem;border-radius:999px;flex:none}
+.crumbs button[aria-current=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.crumbs i{color:var(--muted);font-style:normal}
+.item.fold{background:var(--surface);border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.3rem;padding:.4rem;cursor:pointer}
+.fold svg{width:40%;height:auto;fill:var(--accent)}
+.fold .fn{font-size:.78rem;line-height:1.2;max-width:100%;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word;text-align:center}
+.fold .more{position:absolute;top:2px;right:2px;min-height:32px;width:32px;padding:0;border:0;background:transparent;font-size:1.2rem;color:var(--muted)}
+#fdlg{height:auto;max-height:none;width:min(92vw,360px);border-radius:12px;padding:1rem}
+#fdlg .acts{display:grid;gap:.5rem;margin-top:.8rem}
+#status{text-align:center;color:var(--muted);padding:1.2rem}
+.hide{display:none!important}
+dialog{border:0;padding:0;background:var(--surface);color:var(--ink);width:min(100vw,900px);max-width:100vw;height:100dvh;max-height:100dvh;margin:auto}
+dialog::backdrop{background:rgba(0,0,0,.7)}
+.v{display:flex;flex-direction:column;height:100%}
+.v .top{padding:.6rem .8rem;display:flex;gap:.5rem;align-items:center;border-bottom:1px solid var(--line);padding-top:max(.6rem,env(safe-area-inset-top))}
+.v .top span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v .stage{flex:1;min-height:0;background:#000;display:grid;place-items:center}
+.v .stage img,.v .stage iframe{width:100%;height:100%;border:0;object-fit:contain}
+.v .acts{display:flex;gap:.5rem;padding:.7rem .8rem;padding-bottom:max(.7rem,env(safe-area-inset-bottom));flex-wrap:wrap}
+.v .acts button{flex:1;white-space:nowrap}
+#toast{position:fixed;left:50%;bottom:calc(5.5rem + env(safe-area-inset-bottom,0));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:.6rem 1rem;border-radius:var(--r);z-index:20;max-width:90vw}
+#fab{position:fixed;right:1rem;bottom:calc(1rem + env(safe-area-inset-bottom,0));z-index:6;border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.3);padding:.8rem 1.2rem}
+#prog{position:fixed;left:0;top:0;height:3px;background:var(--accent);width:0;z-index:30;transition:width .2s}
+</style>
+</head>
+<body>
+<div id="prog"></div>
+
+<section id="login">
+  <h1>Galeri Drive Saya</h1>
+  <p>Masuk dengan akun Google untuk melihat, mengunggah, mengganti nama, dan menghapus foto serta video di Drive kamu.</p>
+  <button class="primary" id="btnLogin">Masuk dengan Google</button>
+  <p id="cfgWarn" class="hide" style="color:var(--danger)">Client ID belum diisi. Edit konstanta CLIENT_ID di index.html.</p>
+</section>
+
+<div id="app" class="hide">
+  <header>
+    <div class="row">
+      <h1>Galeri Drive</h1>
+      <button id="btnLogout">Keluar</button>
+    </div>
+    <div class="row" style="margin-top:.6rem">
+      <input id="search" type="search" placeholder="Cari di seluruh Drive" aria-label="Cari nama file">
+      <button id="btnNew">Folder baru</button>
+    </div>
+    <nav class="crumbs" id="crumbs" aria-label="Lokasi folder"></nav>
+    <div class="tabs" role="group" aria-label="Filter">
+      <button data-f="all" aria-pressed="true">Semua</button>
+      <button data-f="image" aria-pressed="false">Foto</button>
+      <button data-f="video" aria-pressed="false">Video</button>
+    </div>
+  </header>
+  <main>
+    <div id="grid"></div>
+    <div id="status"></div>
+    <div id="sentinel" style="height:1px"></div>
+  </main>
+  <button id="fab" class="primary">Unggah</button>
+  <input id="file" type="file" accept="image/*,video/*" multiple class="hide">
+</div>
+
+<dialog id="dlg">
+  <div class="v">
+    <div class="top"><span id="vName"></span><button id="vClose">Tutup</button></div>
+    <div class="stage" id="stage"></div>
+    <div class="acts">
+      <button id="aOpen">Buka di Drive</button>
+      <button id="aDl">Unduh</button>
+      <button id="aRen">Ganti nama</button>
+      <button id="aDel" class="danger">Hapus</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="fdlg"><strong id="fName" style="word-break:break-word"></strong><div class="acts"><button id="fRen">Ganti nama</button><button id="fDel" class="danger">Hapus folder</button><button id="fClose">Tutup</button></div></dialog>
+
+<div id="toast" class="hide" role="status"></div>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+// ====== ISI INI ======
+const CLIENT_ID = "ISI_CLIENT_ID_KAMU.apps.googleusercontent.com";
+// =====================
+const SCOPE = "https://www.googleapis.com/auth/drive";
+const API = "https://www.googleapis.com/drive/v3/files";
+const $ = s => document.querySelector(s);
+let token = null, tokenClient = null, filter = "all", term = "", next = null, loading = false, done = false, gen = 0, cur = null, path = [{id:"root",name:"Drive Saya"}], fcur = null;
+
+function toast(m){const t=$("#toast");t.textContent=m;t.classList.remove("hide");clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.add("hide"),3000)}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+
+// ---- Login ----
+if(CLIENT_ID.startsWith("ISI_")) $("#cfgWarn").classList.remove("hide");
+function initAuth(){
+  if(!window.google||!google.accounts){return setTimeout(initAuth,300)}
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID, scope: SCOPE,
+    callback: r => { if(r.access_token){ token=r.access_token; sessionStorage.setItem("t",token); sessionStorage.setItem("te",Date.now()+3300e3); showApp(); } else toast("Login gagal") }
+  });
+  const t=sessionStorage.getItem("t"), e=+sessionStorage.getItem("te");
+  if(t && e>Date.now()){ token=t; showApp(); }
+}
+initAuth();
+$("#btnLogin").onclick = () => tokenClient ? tokenClient.requestAccessToken({prompt:""}) : toast("Tunggu sebentar, Google belum siap");
+$("#btnLogout").onclick = () => { if(token) google.accounts.oauth2.revoke(token); token=null; sessionStorage.clear(); location.reload(); };
+function showApp(){ $("#login").classList.add("hide"); $("#app").classList.remove("hide"); reset(); }
+
+// ---- Drive helper ----
+async function drive(url, opt={}, retry=true){
+  const r = await fetch(url, {...opt, headers:{...(opt.headers||{}), Authorization:"Bearer "+token}});
+  if(r.status===401 && retry){
+    await new Promise(res=>{ tokenClient.callback=x=>{token=x.access_token;sessionStorage.setItem("t",token);sessionStorage.setItem("te",Date.now()+3300e3);res()}; tokenClient.requestAccessToken({prompt:""}); });
+    return drive(url,opt,false);
+  }
+  if(!r.ok) throw new Error("Drive error "+r.status);
+  return r;
+}
+
+// ---- Read: daftar + cari + infinite scroll ----
+function query(){
+  const m = filter==="image" ? "mimeType contains 'image/'" : filter==="video" ? "mimeType contains 'video/'" : "mimeType contains 'image/' or mimeType contains 'video/'";
+  let q = "trashed=false and (("+m+") or mimeType='"+FOLD+"')";
+  if(term) q += " and name contains '"+term.replace(/\\/g,"\\\\").replace(/'/g,"\\'")+"'";
+  else q += " and '"+here()+"' in parents";
+  return q;
+}
+function reset(){ renderCrumbs(); gen++; next=null; done=false; loading=false; $("#grid").innerHTML=""; $("#status").textContent=""; load(); }
+async function load(){
+  if(loading||done) return; loading=true; const g=gen; $("#status").textContent="Memuat...";
+  try{
+    const p = new URLSearchParams({q:query(), pageSize:"60", orderBy:"folder,createdTime desc", fields:"nextPageToken,files(id,name,mimeType,thumbnailLink,webViewLink)", spaces:"drive"});
+    if(next) p.set("pageToken",next);
+    const d = await (await drive(API+"?"+p)).json();
+    if(g!==gen) return;
+    d.files.forEach(addTile); next=d.nextPageToken||null; done=!next;
+    $("#status").textContent = done ? ($("#grid").children.length ? "" : (term ? "Tidak ada hasil." : "Folder ini kosong.")) : "";
+  }catch(e){ $("#status").textContent="Gagal memuat. Coba muat ulang halaman."; }
+  loading=false;
+}
+function addTile(f){
+  if(f.mimeType===FOLD) return addFolder(f);
+  const b=document.createElement("button"); b.className="item"; b.id="t-"+f.id; b.setAttribute("aria-label",f.name);
+  const vid=f.mimeType.startsWith("video/");
+  b.innerHTML=(f.thumbnailLink?`<img loading="lazy" referrerpolicy="no-referrer" src="${esc(f.thumbnailLink.replace(/=s\d+$/,"=s400"))}" alt="">`:`<span class="nm">${esc(f.name)}</span>`)+(vid?'<span class="tag">Video</span>':"");
+  b.onclick=()=>openItem(f); $("#grid").appendChild(b);
+}
+new IntersectionObserver(e=>{ if(e[0].isIntersecting && token) load(); },{rootMargin:"600px"}).observe($("#sentinel"));
+$("#search").addEventListener("input",()=>{ clearTimeout(reset.t); reset.t=setTimeout(()=>{term=$("#search").value.trim();reset()},400) });
+document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{ filter=b.dataset.f; document.querySelectorAll(".tabs button").forEach(x=>x.setAttribute("aria-pressed",x===b)); reset(); });
+
+// ---- Preview ----
+function openItem(f){
+  cur=f; $("#vName").textContent=f.name;
+  const s=$("#stage");
+  if(f.mimeType.startsWith("video/")) s.innerHTML=`<iframe src="https://drive.google.com/file/d/${f.id}/preview" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+  else s.innerHTML=f.thumbnailLink?`<img referrerpolicy="no-referrer" src="${esc(f.thumbnailLink.replace(/=s\d+$/,"=s1600"))}" alt="${esc(f.name)}">`:"";
+  $("#dlg").showModal();
+}
+function closeV(){ $("#stage").innerHTML=""; $("#dlg").close(); }
+$("#vClose").onclick=closeV; $("#dlg").addEventListener("cancel",()=>{$("#stage").innerHTML=""});
+$("#aOpen").onclick=()=>window.open(cur.webViewLink,"_blank","noopener");
+
+// ---- Download ----
+$("#aDl").onclick=async()=>{
+  try{ toast("Mengunduh..."); const r=await drive(API+"/"+cur.id+"?alt=media"); const u=URL.createObjectURL(await r.blob());
+    const a=document.createElement("a"); a.href=u; a.download=cur.name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),6e4);
+  }catch(e){ toast("Gagal mengunduh") }
+};
+
+// ---- Update: ganti nama ----
+$("#aRen").onclick=async()=>{
+  const n=prompt("Nama baru:",cur.name); if(!n||n===cur.name) return;
+  try{ await drive(API+"/"+cur.id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:n})});
+    cur.name=n; $("#vName").textContent=n; const t=$("#t-"+cur.id); if(t) t.setAttribute("aria-label",n); toast("Nama diganti");
+  }catch(e){ toast("Gagal mengganti nama") }
+};
+
+// ---- Delete: ke tempat sampah (bisa dipulihkan di Drive) ----
+$("#aDel").onclick=async()=>{
+  if(!confirm("Pindahkan \""+cur.name+"\" ke tempat sampah Drive?")) return;
+  try{ await drive(API+"/"+cur.id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({trashed:true})});
+    const t=$("#t-"+cur.id); if(t) t.remove(); closeV(); toast("Dipindahkan ke tempat sampah");
+  }catch(e){ toast("Gagal menghapus") }
+};
+
+// ---- Create: unggah (resumable, cocok untuk video besar) ----
+$("#fab").onclick=()=>$("#file").click();
+$("#file").onchange=async e=>{
+  const fs=[...e.target.files]; e.target.value="";
+  for(let i=0;i<fs.length;i++){ try{ toast(`Mengunggah ${i+1}/${fs.length}: ${fs[i].name}`); await upload(fs[i]); }catch(err){ toast("Gagal unggah "+fs[i].name); } }
+  $("#prog").style.width="0"; toast("Unggah selesai"); reset();
+};
+async function upload(file){
+  const init=await drive("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable",{method:"POST",
+    headers:{"Content-Type":"application/json; charset=UTF-8","X-Upload-Content-Type":file.type||"application/octet-stream"},
+    body:JSON.stringify({name:file.name,parents:[here()]})});
+  const loc=init.headers.get("Location");
+  await new Promise((ok,bad)=>{
+    const x=new XMLHttpRequest(); x.open("PUT",loc);
+    x.upload.onprogress=ev=>{ if(ev.lengthComputable) $("#prog").style.width=(ev.loaded/ev.total*100)+"%" };
+    x.onload=()=>x.status<300?ok():bad(); x.onerror=bad; x.send(file);
+  });
+}
+
+// ---- Folder ----
+const FOLD="application/vnd.google-apps.folder";
+const FICON='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg>';
+function here(){ return path[path.length-1].id }
+function renderCrumbs(){
+  const c=$("#crumbs"); c.innerHTML="";
+  if(term){ const s=document.createElement("span"); s.style.color="var(--muted)"; s.textContent="Hasil pencarian di seluruh Drive"; c.appendChild(s); return; }
+  path.forEach((p,i)=>{
+    if(i){ const s=document.createElement("i"); s.textContent="\u203A"; c.appendChild(s); }
+    const b=document.createElement("button"); b.textContent=p.name;
+    if(i===path.length-1) b.setAttribute("aria-current","true");
+    b.onclick=()=>{ if(i<path.length-1) history.go(i-(path.length-1)); };
+    c.appendChild(b);
+  });
+  c.scrollLeft=c.scrollWidth;
+}
+function openFolder(f){ path.push({id:f.id,name:f.name}); history.pushState({d:path.length},""); $("#search").value=""; term=""; reset(); window.scrollTo(0,0); }
+addEventListener("popstate",()=>{ path=path.slice(0,(history.state&&history.state.d)||1); reset(); });
+function addFolder(f){
+  const d=document.createElement("div"); d.className="item fold"; d.id="t-"+f.id; d.tabIndex=0; d.setAttribute("role","button"); d.setAttribute("aria-label","Folder "+f.name);
+  d.innerHTML=FICON+`<span class="fn">${esc(f.name)}</span><button class="more" aria-label="Opsi folder">\u22EE</button>`;
+  d.onclick=()=>openFolder(f);
+  d.onkeydown=e=>{ if(e.key==="Enter"&&e.target===d) openFolder(f) };
+  d.querySelector(".more").onclick=e=>{ e.stopPropagation(); fcur=f; $("#fName").textContent=f.name; $("#fdlg").showModal(); };
+  $("#grid").appendChild(d);
+}
+$("#btnNew").onclick=async()=>{
+  const n=prompt("Nama folder baru:"); if(!n||!n.trim()) return;
+  try{ await drive(API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:n.trim(),mimeType:FOLD,parents:[here()]})}); toast("Folder dibuat"); reset(); }
+  catch(e){ toast("Gagal membuat folder") }
+};
+$("#fClose").onclick=()=>$("#fdlg").close();
+$("#fRen").onclick=async()=>{
+  const n=prompt("Nama folder baru:",fcur.name); $("#fdlg").close(); if(!n||n===fcur.name) return;
+  try{ await drive(API+"/"+fcur.id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:n})});
+    fcur.name=n; const t=$("#t-"+fcur.id+" .fn"); if(t) t.textContent=n; toast("Nama folder diganti");
+  }catch(e){ toast("Gagal mengganti nama") }
+};
+$("#fDel").onclick=async()=>{
+  $("#fdlg").close();
+  if(!confirm("Pindahkan folder \""+fcur.name+"\" beserta seluruh isinya ke tempat sampah Drive?")) return;
+  try{ await drive(API+"/"+fcur.id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({trashed:true})});
+    const t=$("#t-"+fcur.id); if(t) t.remove(); toast("Folder dipindahkan ke tempat sampah");
+  }catch(e){ toast("Gagal menghapus folder") }
+};
+</script>
+</body>
+</html>
