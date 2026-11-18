@@ -86,7 +86,7 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <div id="app" class="hide">
   <header>
     <div class="row">
-      <h1>Galeri Drive <small style="font-weight:400;color:var(--muted);font-size:.7rem">v10</small></h1>
+      <h1>Galeri Drive <small style="font-weight:400;color:var(--muted);font-size:.7rem">v11</small></h1>
       <button id="btnLogout">Keluar</button>
     </div>
     <div class="row" style="margin-top:.6rem">
@@ -119,6 +119,7 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
     <div class="top"><div style="flex:1;min-width:0"><div id="vName" class="ell"></div><small id="vDate" style="color:var(--muted)"></small></div><button id="vClose">Tutup</button></div>
     <div class="stage" id="stage"></div>
     <div class="acts">
+      <button id="aPlayer" class="hide">Ganti pemutar</button>
       <button id="aOpen">Buka di Drive</button>
       <button id="aDl">Unduh</button>
       <button id="aRen">Ganti nama</button>
@@ -218,14 +219,16 @@ document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{ filter=b.da
 function openItem(f){
   cur=f; $("#vName").textContent=f.name;
   $("#vDate").textContent=f.modifiedTime?"Diubah "+new Date(f.modifiedTime).toLocaleString("id-ID",{dateStyle:"medium",timeStyle:"short"}):"";
+  $("#aPlayer").classList.toggle("hide",!f.mimeType.startsWith("video/"));
   const cp=f.capabilities||{}; $("#aRen").disabled=!cp.canRename; $("#aDel").disabled=!cp.canTrash;
   const s=$("#stage");
-  if(f.mimeType.startsWith("video/")) playVideo(f,s);
+  if(f.mimeType.startsWith("video/")) playIframe(f,s);
   else s.innerHTML=f.thumbnailLink?`<img referrerpolicy="no-referrer" src="${esc(f.thumbnailLink.replace(/=s\d+$/,"=s1600"))}" alt="${esc(f.name)}">`:"";
   $("#dlg").showModal();
 }
 function closeV(){ $("#stage").innerHTML=""; $("#dlg").close(); }
 $("#vClose").onclick=closeV; $("#dlg").addEventListener("cancel",()=>{$("#stage").innerHTML=""});
+$("#aPlayer").onclick=()=>{ const st=$("#stage"); st.querySelector("iframe") ? playVideo(cur,st) : playIframe(cur,st); };
 $("#aOpen").onclick=()=>window.open(cur.webViewLink,"_blank","noopener");
 
 // ---- Download ----
@@ -404,37 +407,29 @@ function flatMore(){
 }
 
 // ---- Pemutar video bawaan browser (responsif di HP); cadangan: pemutar Drive ----
+// Pemutar Drive (bisa semua codec) dibuat pas dengan layar lewat skala
+function playIframe(f,s){
+  s.innerHTML="";
+  const fr=document.createElement("iframe");
+  fr.src="https://drive.google.com/file/d/"+f.id+"/preview"; fr.allow="autoplay; fullscreen"; fr.allowFullscreen=true;
+  fr.style.cssText="position:absolute;left:0;top:0;right:auto;bottom:auto;border:0;transform-origin:0 0";
+  s.appendChild(fr);
+  const D=600, fit=()=>{
+    if(!fr.isConnected){ ro.disconnect(); return; }
+    const W=s.clientWidth, H=s.clientHeight, k=Math.min(1,W/D);
+    fr.style.width=(W/k)+"px"; fr.style.height=(H/k)+"px"; fr.style.transform="scale("+k+")";
+  };
+  const ro=new ResizeObserver(fit); ro.observe(s); fit();
+}
+// Pemutar bawaan browser (hanya untuk codec yang didukung)
 function playVideo(f,s){
   s.innerHTML="";
   const v=document.createElement("video");
   v.controls=true; v.playsInline=true; v.preload="metadata"; v.style.background="#000";
   if(f.thumbnailLink) v.poster=f.thumbnailLink.replace(/=s\d+$/,"=s1000");
   v.src=API+"/"+f.id+"?alt=media&access_token="+encodeURIComponent(token);
-  v.onerror=async()=>{
-    const code=v.error&&v.error.code;
-    let why={2:"gangguan jaringan saat memuat",3:"video gagal didekode (kemungkinan codec tidak didukung browser, mis. HEVC)",4:"format atau sumber video tidak didukung browser"}[code]||"video tidak bisa dimuat";
-    try{ await drive(API+"/"+f.id+"?alt=media",{headers:{Range:"bytes=0-0"}},false); }
-    catch(e){ why=e.status===403?"pemilik file membatasi unduhan/streaming, atau file ditandai Google":"ditolak Google (kode "+(e.status||"?")+")"; }
-    if(innerWidth>=900){
-      s.innerHTML=`<iframe src="https://drive.google.com/file/d/${f.id}/preview" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
-      toast("Memakai pemutar Drive: "+why);
-    }else videoPanel(s,f,why,code===4||code===3);
-  };
+  v.onerror=()=>{ playIframe(f,s); toast("Pemutar bawaan tidak mendukung video ini, kembali ke pemutar Drive"); };
   s.appendChild(v);
-}
-function videoPanel(s,f,why,blobOk){
-  s.innerHTML=`<div style="position:absolute;inset:0;display:grid;place-content:center;gap:.9rem;padding:1.2rem;text-align:center;color:#fff"><p>Video tidak bisa diputar di halaman ini:<br>${esc(why)}.<br><small style="opacity:.7">Tipe file di Drive: ${esc(f.mimeType)}</small></p><button class="primary" id="fbOpen">Buka di pemutar Drive</button>${blobOk?'<button id="fbBlob">Coba putar lewat unduhan</button>':""}</div>`;
-  $("#fbOpen").onclick=()=>window.open(f.webViewLink,"_blank","noopener");
-  if(blobOk) $("#fbBlob").onclick=async()=>{
-    toast("Mengunduh video, mohon tunggu...");
-    try{
-      const blob=await (await drive(API+"/"+f.id+"?alt=media")).blob();
-      const w=document.createElement("video"); w.controls=true; w.playsInline=true; w.style.background="#000";
-      w.src=URL.createObjectURL(new Blob([blob],{type:f.mimeType}));
-      w.onerror=()=>videoPanel(s,f,"tetap tidak bisa diputar browser, kemungkinan codec video tidak didukung",false);
-      s.innerHTML=""; s.appendChild(w); w.play().catch(()=>{});
-    }catch(e){ toast("Gagal mengunduh video") }
-  };
 }
 </script>
 </body>
