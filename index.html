@@ -180,7 +180,7 @@ function query(){
   const flat = prefs.mode==="flat";
   let q = "trashed=false and (("+m+")"+(flat?"":" or mimeType='"+FOLD+"'")+")";
   if(term) q += " and name contains '"+term.replace(/\\/g,"\\\\").replace(/'/g,"\\'")+"'";
-  else if(flat) q += path[0].id==="shared" ? " and not 'me' in owners" : " and 'me' in owners";
+  else if(flat) q += ""; // semua foto/video yang bisa diakses, tanpa batasan folder/pemilik
   else if(here()==="shared") q += " and sharedWithMe=true";
   else q += " and '"+here()+"' in parents";
   return q;
