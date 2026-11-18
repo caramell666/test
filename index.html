@@ -46,6 +46,10 @@ main{padding:.9rem}
 .fold .more{position:absolute;top:2px;right:2px;min-height:32px;width:32px;padding:0;border:0;background:transparent;font-size:1.2rem;color:var(--muted)}
 #fdlg{height:auto;max-height:none;width:min(92vw,360px);border-radius:12px;padding:1rem}
 #fdlg .acts{display:grid;gap:.5rem;margin-top:.8rem}
+.seg{display:flex;gap:.4rem;margin-top:.6rem}
+.seg button{flex:1;padding:.4rem}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:not-allowed}
 #status{text-align:center;color:var(--muted);padding:1.2rem}
 .hide{display:none!important}
 dialog{border:0;padding:0;background:var(--surface);color:var(--ink);width:min(100vw,900px);max-width:100vw;height:100dvh;max-height:100dvh;margin:auto}
@@ -82,6 +86,7 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
       <input id="search" type="search" placeholder="Cari di seluruh Drive" aria-label="Cari nama file">
       <button id="btnNew">Folder baru</button>
     </div>
+    <div class="seg" role="group" aria-label="Sumber file"><button data-s="root" aria-pressed="true">Drive Saya</button><button data-s="shared" aria-pressed="false">Dibagikan ke saya</button></div>
     <nav class="crumbs" id="crumbs" aria-label="Lokasi folder"></nav>
     <div class="tabs" role="group" aria-label="Filter">
       <button data-f="all" aria-pressed="true">Semua</button>
@@ -151,7 +156,7 @@ async function drive(url, opt={}, retry=true){
     await new Promise(res=>{ tokenClient.callback=x=>{token=x.access_token;sessionStorage.setItem("t",token);sessionStorage.setItem("te",Date.now()+3300e3);res()}; tokenClient.requestAccessToken({prompt:""}); });
     return drive(url,opt,false);
   }
-  if(!r.ok) throw new Error("Drive error "+r.status);
+  if(!r.ok){ const er=new Error("Drive error "+r.status); er.status=r.status; throw er; }
   return r;
 }
 
@@ -160,6 +165,7 @@ function query(){
   const m = filter==="image" ? "mimeType contains 'image/'" : filter==="video" ? "mimeType contains 'video/'" : "mimeType contains 'image/' or mimeType contains 'video/'";
   let q = "trashed=false and (("+m+") or mimeType='"+FOLD+"')";
   if(term) q += " and name contains '"+term.replace(/\\/g,"\\\\").replace(/'/g,"\\'")+"'";
+  else if(here()==="shared") q += " and sharedWithMe=true";
   else q += " and '"+here()+"' in parents";
   return q;
 }
@@ -167,7 +173,7 @@ function reset(){ renderCrumbs(); gen++; next=null; done=false; loading=false; $
 async function load(){
   if(loading||done) return; loading=true; const g=gen; $("#status").textContent="Memuat...";
   try{
-    const p = new URLSearchParams({q:query(), pageSize:"60", orderBy:"folder,createdTime desc", fields:"nextPageToken,files(id,name,mimeType,thumbnailLink,webViewLink)", spaces:"drive"});
+    const p = new URLSearchParams({q:query(), pageSize:"60", orderBy:"folder,createdTime desc", fields:"nextPageToken,files(id,name,mimeType,thumbnailLink,webViewLink,capabilities(canRename,canTrash))", spaces:"drive"});
     if(next) p.set("pageToken",next);
     const d = await (await drive(API+"?"+p)).json();
     if(g!==gen) return;
@@ -190,6 +196,7 @@ document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{ filter=b.da
 // ---- Preview ----
 function openItem(f){
   cur=f; $("#vName").textContent=f.name;
+  const cp=f.capabilities||{}; $("#aRen").disabled=!cp.canRename; $("#aDel").disabled=!cp.canTrash;
   const s=$("#stage");
   if(f.mimeType.startsWith("video/")) s.innerHTML=`<iframe src="https://drive.google.com/file/d/${f.id}/preview" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
   else s.innerHTML=f.thumbnailLink?`<img referrerpolicy="no-referrer" src="${esc(f.thumbnailLink.replace(/=s\d+$/,"=s1600"))}" alt="${esc(f.name)}">`:"";
@@ -211,7 +218,7 @@ $("#aRen").onclick=async()=>{
   const n=prompt("Nama baru:",cur.name); if(!n||n===cur.name) return;
   try{ await drive(API+"/"+cur.id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:n})});
     cur.name=n; $("#vName").textContent=n; const t=$("#t-"+cur.id); if(t) t.setAttribute("aria-label",n); toast("Nama diganti");
-  }catch(e){ toast("Gagal mengganti nama") }
+  }catch(e){ fail(e,"Gagal mengganti nama") }
 };
 
 // ---- Delete: ke tempat sampah (bisa dipulihkan di Drive) ----
@@ -219,14 +226,14 @@ $("#aDel").onclick=async()=>{
   if(!confirm("Pindahkan \""+cur.name+"\" ke tempat sampah Drive?")) return;
   try{ await drive(API+"/"+cur.id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({trashed:true})});
     const t=$("#t-"+cur.id); if(t) t.remove(); closeV(); toast("Dipindahkan ke tempat sampah");
-  }catch(e){ toast("Gagal menghapus") }
+  }catch(e){ fail(e,"Gagal menghapus") }
 };
 
 // ---- Create: unggah (resumable, cocok untuk video besar) ----
-$("#fab").onclick=()=>$("#file").click();
+$("#fab").onclick=()=>{ if(here()==="shared") return toast("Buka salah satu folder dulu untuk mengunggah"); $("#file").click(); };
 $("#file").onchange=async e=>{
   const fs=[...e.target.files]; e.target.value="";
-  for(let i=0;i<fs.length;i++){ try{ toast(`Mengunggah ${i+1}/${fs.length}: ${fs[i].name}`); await upload(fs[i]); }catch(err){ toast("Gagal unggah "+fs[i].name); } }
+  for(let i=0;i<fs.length;i++){ try{ toast(`Mengunggah ${i+1}/${fs.length}: ${fs[i].name}`); await upload(fs[i]); }catch(err){ fail(err,"Gagal unggah "+fs[i].name); } }
   $("#prog").style.width="0"; toast("Unggah selesai"); reset();
 };
 async function upload(file){
@@ -264,28 +271,36 @@ function addFolder(f){
   d.innerHTML=FICON+`<span class="fn">${esc(f.name)}</span><button class="more" aria-label="Opsi folder">\u22EE</button>`;
   d.onclick=()=>openFolder(f);
   d.onkeydown=e=>{ if(e.key==="Enter"&&e.target===d) openFolder(f) };
-  d.querySelector(".more").onclick=e=>{ e.stopPropagation(); fcur=f; $("#fName").textContent=f.name; $("#fdlg").showModal(); };
+  d.querySelector(".more").onclick=e=>{ e.stopPropagation(); fcur=f; $("#fName").textContent=f.name; const cp=f.capabilities||{}; $("#fRen").disabled=!cp.canRename; $("#fDel").disabled=!cp.canTrash; $("#fdlg").showModal(); };
   $("#grid").appendChild(d);
 }
 $("#btnNew").onclick=async()=>{
+  if(here()==="shared") return toast("Buka salah satu folder dulu untuk membuat folder");
   const n=prompt("Nama folder baru:"); if(!n||!n.trim()) return;
   try{ await drive(API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:n.trim(),mimeType:FOLD,parents:[here()]})}); toast("Folder dibuat"); reset(); }
-  catch(e){ toast("Gagal membuat folder") }
+  catch(e){ fail(e,"Gagal membuat folder") }
 };
 $("#fClose").onclick=()=>$("#fdlg").close();
 $("#fRen").onclick=async()=>{
   const n=prompt("Nama folder baru:",fcur.name); $("#fdlg").close(); if(!n||n===fcur.name) return;
   try{ await drive(API+"/"+fcur.id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:n})});
     fcur.name=n; const t=$("#t-"+fcur.id+" .fn"); if(t) t.textContent=n; toast("Nama folder diganti");
-  }catch(e){ toast("Gagal mengganti nama") }
+  }catch(e){ fail(e,"Gagal mengganti nama") }
 };
 $("#fDel").onclick=async()=>{
   $("#fdlg").close();
   if(!confirm("Pindahkan folder \""+fcur.name+"\" beserta seluruh isinya ke tempat sampah Drive?")) return;
   try{ await drive(API+"/"+fcur.id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({trashed:true})});
     const t=$("#t-"+fcur.id); if(t) t.remove(); toast("Folder dipindahkan ke tempat sampah");
-  }catch(e){ toast("Gagal menghapus folder") }
+  }catch(e){ fail(e,"Gagal menghapus folder") }
 };
+
+// ---- Sumber: Drive Saya / Dibagikan ke saya ----
+function fail(e,m){ toast(e&&(e.status===403||e.status===404) ? "Ditolak: kamu hanya punya akses lihat pada item ini" : m) }
+document.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(".seg button").forEach(x=>x.setAttribute("aria-pressed",x===b));
+  path=[{id:b.dataset.s,name:b.textContent}]; history.replaceState(null,""); $("#search").value=""; term=""; reset();
+});
 </script>
 </body>
 </html>
