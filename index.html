@@ -86,7 +86,7 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <div id="app" class="hide">
   <header>
     <div class="row">
-      <h1>Galeri Drive <small style="font-weight:400;color:var(--muted);font-size:.7rem">v9</small></h1>
+      <h1>Galeri Drive <small style="font-weight:400;color:var(--muted);font-size:.7rem">v10</small></h1>
       <button id="btnLogout">Keluar</button>
     </div>
     <div class="row" style="margin-top:.6rem">
@@ -411,22 +411,30 @@ function playVideo(f,s){
   if(f.thumbnailLink) v.poster=f.thumbnailLink.replace(/=s\d+$/,"=s1000");
   v.src=API+"/"+f.id+"?alt=media&access_token="+encodeURIComponent(token);
   v.onerror=async()=>{
-    let why="format tidak didukung browser";
-    try{
-      const r=await drive(API+"/"+f.id+"?alt=media",{headers:{Range:"bytes=0-0"}},false);
-    }catch(e){
-      why="ditolak Google (kode "+(e.status||"?")+")";
-      if(e.status===403) why="pemilik file membatasi unduhan/streaming, atau file ditandai Google";
-    }
+    const code=v.error&&v.error.code;
+    let why={2:"gangguan jaringan saat memuat",3:"video gagal didekode (kemungkinan codec tidak didukung browser, mis. HEVC)",4:"format atau sumber video tidak didukung browser"}[code]||"video tidak bisa dimuat";
+    try{ await drive(API+"/"+f.id+"?alt=media",{headers:{Range:"bytes=0-0"}},false); }
+    catch(e){ why=e.status===403?"pemilik file membatasi unduhan/streaming, atau file ditandai Google":"ditolak Google (kode "+(e.status||"?")+")"; }
     if(innerWidth>=900){
       s.innerHTML=`<iframe src="https://drive.google.com/file/d/${f.id}/preview" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
       toast("Memakai pemutar Drive: "+why);
-    }else{
-      s.innerHTML=`<div style="position:absolute;inset:0;display:grid;place-content:center;gap:1rem;padding:1.2rem;text-align:center;color:#fff"><p>Video tidak bisa diputar di halaman ini:<br>${esc(why)}.</p><button class="primary" id="fbOpen">Buka di pemutar Drive</button></div>`;
-      $("#fbOpen").onclick=()=>window.open(f.webViewLink,"_blank","noopener");
-    }
+    }else videoPanel(s,f,why,code===4||code===3);
   };
   s.appendChild(v);
+}
+function videoPanel(s,f,why,blobOk){
+  s.innerHTML=`<div style="position:absolute;inset:0;display:grid;place-content:center;gap:.9rem;padding:1.2rem;text-align:center;color:#fff"><p>Video tidak bisa diputar di halaman ini:<br>${esc(why)}.<br><small style="opacity:.7">Tipe file di Drive: ${esc(f.mimeType)}</small></p><button class="primary" id="fbOpen">Buka di pemutar Drive</button>${blobOk?'<button id="fbBlob">Coba putar lewat unduhan</button>':""}</div>`;
+  $("#fbOpen").onclick=()=>window.open(f.webViewLink,"_blank","noopener");
+  if(blobOk) $("#fbBlob").onclick=async()=>{
+    toast("Mengunduh video, mohon tunggu...");
+    try{
+      const blob=await (await drive(API+"/"+f.id+"?alt=media")).blob();
+      const w=document.createElement("video"); w.controls=true; w.playsInline=true; w.style.background="#000";
+      w.src=URL.createObjectURL(new Blob([blob],{type:f.mimeType}));
+      w.onerror=()=>videoPanel(s,f,"tetap tidak bisa diputar browser, kemungkinan codec video tidak didukung",false);
+      s.innerHTML=""; s.appendChild(w); w.play().catch(()=>{});
+    }catch(e){ toast("Gagal mengunduh video") }
+  };
 }
 </script>
 </body>
