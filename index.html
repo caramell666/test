@@ -86,7 +86,7 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <div id="app" class="hide">
   <header>
     <div class="row">
-      <h1>Galeri Drive</h1>
+      <h1>Galeri Drive <small style="font-weight:400;color:var(--muted);font-size:.7rem">v7</small></h1>
       <button id="btnLogout">Keluar</button>
     </div>
     <div class="row" style="margin-top:.6rem">
@@ -102,7 +102,7 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
     </div>
     <div class="ctrl">
       <select id="mode" aria-label="Tampilan"><option value="folder">Per folder</option><option value="flat">Semua file (tanpa folder)</option></select>
-      <select id="sort" aria-label="Urutkan"><option value="mod_desc">Terbaru diubah</option><option value="mod_asc">Terlama diubah</option><option value="name_asc">Nama A\u2013Z</option><option value="name_desc">Nama Z\u2013A</option></select>
+      <select id="sort" aria-label="Urutkan"><option value="mod_desc">Terbaru diubah</option><option value="mod_asc">Terlama diubah</option><option value="name_asc">Nama A–Z</option><option value="name_desc">Nama Z–A</option></select>
     </div>
   </header>
   <main>
@@ -142,6 +142,7 @@ const $ = s => document.querySelector(s);
 let token = null, tokenClient = null, filter = "all", term = "", next = null, loading = false, done = false, gen = 0, cur = null, path = [{id:"root",name:"Drive Saya"}], fcur = null;
 const FOLD="application/vnd.google-apps.folder";
 let prefs={sort:"mod_desc",mode:"folder"};
+let flatCache=null, flatReady=false, flatList=[], flatPos=0;
 try{ Object.assign(prefs,JSON.parse(localStorage.getItem("prefs")||"{}")) }catch(e){}
 
 function toast(m){const t=$("#toast");t.textContent=m;t.classList.remove("hide");clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.add("hide"),3000)}
@@ -165,6 +166,7 @@ function showApp(){ $("#login").classList.add("hide"); $("#app").classList.remov
 
 // ---- Drive helper ----
 async function drive(url, opt={}, retry=true){
+  if(opt.method==="POST") flatCache=null;
   const r = await fetch(url, {...opt, headers:{...(opt.headers||{}), Authorization:"Bearer "+token}});
   if(r.status===401 && retry){
     await new Promise(res=>{ tokenClient.callback=x=>{token=x.access_token;sessionStorage.setItem("t",token);sessionStorage.setItem("te",Date.now()+3300e3);res()}; tokenClient.requestAccessToken({prompt:""}); });
@@ -185,18 +187,21 @@ function query(){
   else q += " and '"+here()+"' in parents";
   return q;
 }
-function reset(){ renderCrumbs(); gen++; next=null; done=false; loading=false; $("#grid").innerHTML=""; $("#status").textContent=""; load(); }
+function reset(){ renderCrumbs(); gen++; flatReady=false; next=null; done=false; loading=false; $("#grid").innerHTML=""; $("#status").textContent=""; load(); }
 async function load(){
-  if(loading||done) return; loading=true; const g=gen; $("#status").textContent="Memuat...";
+  if(loading||done) return;
+  if(prefs.mode==="flat") return loadFlat();
+  loading=true; const g=gen; $("#status").textContent="Memuat...";
   try{
     const p = new URLSearchParams({q:query(), pageSize:"60", orderBy:orderBy(), fields:"nextPageToken,files(id,name,mimeType,thumbnailLink,webViewLink,modifiedTime,capabilities(canRename,canTrash))", spaces:"drive"});
     if(next) p.set("pageToken",next);
     const d = await (await drive(API+"?"+p)).json();
     if(g!==gen) return;
     d.files.forEach(addTile); next=d.nextPageToken||null; done=!next;
-    $("#status").textContent = done ? ($("#grid").children.length ? "" : (term ? "Tidak ada hasil." : "Folder ini kosong.")) : "";
-  }catch(e){ $("#status").textContent="Gagal memuat"+(e.status?" (kode "+e.status+")":"")+". Coba muat ulang halaman."; }
+    $("#status").textContent = done ? ($("#grid").children.length ? "" : (term ? "Tidak ada hasil." : prefs.mode==="flat" ? "Tidak ada foto atau video ditemukan di Drive yang bisa diakses (v6)." : "Folder ini kosong.")) : "";
+  }catch(e){ $("#status").textContent="Gagal memuat"+(e.status?" (kode "+e.status+")":"")+". Coba muat ulang halaman."; done=true; }
   loading=false;
+  if(!done && g===gen && $("#sentinel").getBoundingClientRect().top < innerHeight+600) load();
 }
 function addTile(f){
   if(f.mimeType===FOLD) return addFolder(f);
@@ -242,7 +247,7 @@ $("#aRen").onclick=async()=>{
 $("#aDel").onclick=async()=>{
   if(!confirm("Pindahkan \""+cur.name+"\" ke tempat sampah Drive?")) return;
   try{ await drive(API+"/"+cur.id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({trashed:true})});
-    const t=$("#t-"+cur.id); if(t) t.remove(); closeV(); toast("Dipindahkan ke tempat sampah");
+    const t=$("#t-"+cur.id); if(t) t.remove(); dropCache(cur.id); closeV(); toast("Dipindahkan ke tempat sampah");
   }catch(e){ fail(e,"Gagal menghapus") }
 };
 
@@ -270,7 +275,7 @@ const FICON='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4H4a2 2 0 
 function here(){ return path[path.length-1].id }
 function renderCrumbs(){
   const c=$("#crumbs"); c.innerHTML="";
-  if(term||prefs.mode==="flat"){ const s=document.createElement("span"); s.style.color="var(--muted)"; s.textContent=term?"Hasil pencarian di seluruh Drive":"Semua file tanpa folder"; c.appendChild(s); return; }
+  if(term||prefs.mode==="flat"){ const s=document.createElement("span"); s.style.color="var(--muted)"; s.textContent=(term&&prefs.mode!=="flat")?"Hasil pencarian di seluruh Drive":(path[0].id==="shared"?"Semua file dari akun lain (di luar Drive Saya), tanpa folder":"Semua file di Drive Saya, tanpa folder"); c.appendChild(s); return; }
   path.forEach((p,i)=>{
     if(i){ const s=document.createElement("i"); s.textContent="\u203A"; c.appendChild(s); }
     const b=document.createElement("button"); b.textContent=p.name;
@@ -307,7 +312,7 @@ $("#fDel").onclick=async()=>{
   $("#fdlg").close();
   if(!confirm("Pindahkan folder \""+fcur.name+"\" beserta seluruh isinya ke tempat sampah Drive?")) return;
   try{ await drive(API+"/"+fcur.id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({trashed:true})});
-    const t=$("#t-"+fcur.id); if(t) t.remove(); toast("Folder dipindahkan ke tempat sampah");
+    const t=$("#t-"+fcur.id); if(t) t.remove(); flatCache=null; toast("Folder dipindahkan ke tempat sampah");
   }catch(e){ fail(e,"Gagal menghapus folder") }
 };
 
@@ -328,6 +333,75 @@ function syncMode(){ $("#btnNew").disabled=prefs.mode==="flat"; }
 $("#mode").value=prefs.mode; $("#sort").value=prefs.sort; syncMode();
 $("#mode").onchange=()=>{ prefs.mode=$("#mode").value; savePrefs(); syncMode(); reset(); };
 $("#sort").onchange=()=>{ prefs.sort=$("#sort").value; savePrefs(); reset(); };
+
+// ---- Mode "Semua file": baca seluruh isi Drive Saya (semua subfolder) di browser ----
+const MEDIA="(mimeType contains 'image/' or mimeType contains 'video/')";
+const FFIELDS="id,name,mimeType,thumbnailLink,webViewLink,modifiedTime,capabilities(canRename,canTrash)";
+const chunk=(a,n)=>{ const o=[]; for(let i=0;i<a.length;i+=n) o.push(a.slice(i,i+n)); return o; };
+async function listAll(q,fields){
+  let out=[], tok=null;
+  do{
+    const p=new URLSearchParams({q,pageSize:"1000",fields:"nextPageToken,files("+fields+")",spaces:"drive"}); if(tok) p.set("pageToken",tok);
+    const d=await (await drive(API+"?"+p)).json(); out=out.concat(d.files); tok=d.nextPageToken;
+  }while(tok);
+  return out;
+}
+const inParents=ids=>"("+ids.map(i=>"'"+i+"' in parents").join(" or ")+")";
+async function scanMine(){
+  const folders=["root"], seen=new Set(["root"]); let frontier=["root"];
+  while(frontier.length){
+    const next=[], cs=chunk(frontier,30);
+    for(let i=0;i<cs.length;i+=4){
+      await Promise.all(cs.slice(i,i+4).map(async c=>{
+        const fs=await listAll("trashed=false and mimeType='"+FOLD+"' and "+inParents(c),"id");
+        fs.forEach(f=>{ if(!seen.has(f.id)){ seen.add(f.id); folders.push(f.id); next.push(f.id); } });
+      }));
+      $("#status").textContent="Membaca folder... ("+folders.length+")";
+    }
+    frontier=next;
+  }
+  const items=new Map(), cs=chunk(folders,30);
+  for(let i=0;i<cs.length;i+=4){
+    await Promise.all(cs.slice(i,i+4).map(async c=>{
+      (await listAll("trashed=false and "+MEDIA+" and "+inParents(c),FFIELDS)).forEach(f=>items.set(f.id,f));
+    }));
+    $("#status").textContent="Mengambil file... ("+items.size+")";
+  }
+  return [...items.values()];
+}
+function dropCache(id){
+  if(!flatCache) return;
+  ["mine","all"].forEach(k=>{ if(flatCache[k]) flatCache[k]=flatCache[k].then(a=>a.filter(x=>x.id!==id)); });
+}
+async function loadFlat(){
+  if(flatReady){ flatMore(); return; }
+  loading=true; const g=gen; $("#status").textContent="Memuat...";
+  try{
+    flatCache=flatCache||{};
+    flatCache.mine=flatCache.mine||scanMine();
+    const mine=await flatCache.mine; let items=mine;
+    if(path[0].id==="shared"){
+      flatCache.all=flatCache.all||listAll("trashed=false and "+MEDIA,FFIELDS);
+      const all=await flatCache.all, ids=new Set(mine.map(f=>f.id));
+      items=all.filter(f=>!ids.has(f.id));
+    }
+    if(g!==gen) return;
+    const t=term.toLowerCase(), col=new Intl.Collator("id",{numeric:true,sensitivity:"base"});
+    items=items.filter(f=>(filter==="all"||f.mimeType.startsWith(filter+"/"))&&(!t||f.name.toLowerCase().includes(t)));
+    const m=prefs.sort;
+    items.sort((x,y)=> m==="name_asc"?col.compare(x.name,y.name) : m==="name_desc"?col.compare(y.name,x.name) : m==="mod_asc"?(x.modifiedTime<y.modifiedTime?-1:1):(x.modifiedTime<y.modifiedTime?1:-1));
+    flatList=items; flatPos=0; flatReady=true; loading=false; flatMore();
+  }catch(e){
+    flatCache=null;
+    if(g===gen){ $("#status").textContent="Gagal memuat"+(e.status?" (kode "+e.status+")":"")+". Coba muat ulang halaman."; done=true; loading=false; }
+  }
+}
+function flatMore(){
+  const part=flatList.slice(flatPos,flatPos+80); part.forEach(addTile); flatPos+=part.length;
+  done=flatPos>=flatList.length;
+  $("#status").textContent = done&&!$("#grid").children.length ? "Tidak ada foto atau video yang cocok." : "";
+  setTimeout(()=>{ if(!done && $("#sentinel").getBoundingClientRect().top < innerHeight+600) load(); },0);
+}
 </script>
 </body>
 </html>
