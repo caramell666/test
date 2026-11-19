@@ -64,7 +64,10 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 .v{display:flex;flex-direction:column;height:100%}
 .v .top{padding:.6rem .8rem;display:flex;gap:.5rem;align-items:center;border-bottom:1px solid var(--line);padding-top:max(.6rem,env(safe-area-inset-top))}
 .v .top span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.v .stage{flex:1;min-height:0;background:#000;position:relative}
+.v .stagewrap{flex:1;min-height:0;position:relative;background:#000}
+.v .stage{position:absolute;inset:0}
+.navz{position:absolute;top:20%;bottom:30%;width:38px;z-index:3;border:0;padding:0;min-height:0;background:rgba(0,0,0,.35);color:#fff;font-size:2rem;line-height:1;border-radius:0 12px 12px 0}
+.navz.r{right:0;border-radius:12px 0 0 12px}.navz.l{left:0}
 .v .stage img,.v .stage iframe,.v .stage video{position:absolute;inset:0;width:100%;height:100%;border:0;object-fit:contain}
 .v .acts{display:flex;gap:.5rem;padding:.7rem .8rem;padding-bottom:max(.7rem,env(safe-area-inset-bottom));flex-wrap:wrap}
 .v .acts button{flex:1;white-space:nowrap}
@@ -86,7 +89,7 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <div id="app" class="hide">
   <header>
     <div class="row">
-      <h1>Galeri Drive <small style="font-weight:400;color:var(--muted);font-size:.7rem">v11</small></h1>
+      <h1>Galeri Drive <small style="font-weight:400;color:var(--muted);font-size:.7rem">v12</small></h1>
       <button id="btnLogout">Keluar</button>
     </div>
     <div class="row" style="margin-top:.6rem">
@@ -117,7 +120,7 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <dialog id="dlg">
   <div class="v">
     <div class="top"><div style="flex:1;min-width:0"><div id="vName" class="ell"></div><small id="vDate" style="color:var(--muted)"></small></div><button id="vClose">Tutup</button></div>
-    <div class="stage" id="stage"></div>
+    <div class="stagewrap"><div class="stage" id="stage"></div><button class="navz l hide" id="nPrev" aria-label="Sebelumnya">‹</button><button class="navz r hide" id="nNext" aria-label="Berikutnya">›</button></div>
     <div class="acts">
       <button id="aPlayer" class="hide">Ganti pemutar</button>
       <button id="aOpen">Buka di Drive</button>
@@ -143,7 +146,7 @@ const $ = s => document.querySelector(s);
 let token = null, tokenClient = null, filter = "all", term = "", next = null, loading = false, done = false, gen = 0, cur = null, path = [{id:"root",name:"Drive Saya"}], fcur = null;
 const FOLD="application/vnd.google-apps.folder";
 let prefs={sort:"mod_desc",mode:"folder"};
-let flatCache=null, flatReady=false, flatList=[], flatPos=0;
+let flatCache=null, flatReady=false, flatList=[], flatPos=0, shown=[];
 try{ Object.assign(prefs,JSON.parse(localStorage.getItem("prefs")||"{}")) }catch(e){}
 
 function toast(m){const t=$("#toast");t.textContent=m;t.classList.remove("hide");clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.add("hide"),3000)}
@@ -188,7 +191,7 @@ function query(){
   else q += " and '"+here()+"' in parents";
   return q;
 }
-function reset(){ renderCrumbs(); gen++; flatReady=false; next=null; done=false; loading=false; $("#grid").innerHTML=""; $("#status").textContent=""; load(); }
+function reset(){ renderCrumbs(); gen++; flatReady=false; shown=[]; next=null; done=false; loading=false; $("#grid").innerHTML=""; $("#status").textContent=""; load(); }
 async function load(){
   if(loading||done) return;
   if(prefs.mode==="flat") return loadFlat();
@@ -206,6 +209,7 @@ async function load(){
 }
 function addTile(f){
   if(f.mimeType===FOLD) return addFolder(f);
+  shown.push(f);
   const b=document.createElement("button"); b.className="item"; b.id="t-"+f.id; b.setAttribute("aria-label",f.name);
   const vid=f.mimeType.startsWith("video/");
   b.innerHTML=(f.thumbnailLink?`<img loading="lazy" referrerpolicy="no-referrer" src="${esc(f.thumbnailLink.replace(/=s\d+$/,"=s400"))}" alt="">`:`<span class="nm">${esc(f.name)}</span>`)+(vid?'<span class="tag">Video</span>':"");
@@ -224,7 +228,11 @@ function openItem(f){
   const s=$("#stage");
   if(f.mimeType.startsWith("video/")) playIframe(f,s);
   else s.innerHTML=f.thumbnailLink?`<img referrerpolicy="no-referrer" src="${esc(f.thumbnailLink.replace(/=s\d+$/,"=s1600"))}" alt="${esc(f.name)}">`:"";
-  $("#dlg").showModal();
+  const ix=shown.indexOf(f);
+  $("#nPrev").classList.toggle("hide",ix<=0);
+  $("#nNext").classList.toggle("hide",ix<0||(ix>=shown.length-1&&done));
+  if(ix>=0) $("#vDate").textContent+=(f.modifiedTime?" \u00B7 ":"")+(ix+1)+"/"+shown.length;
+  if(!$("#dlg").open) $("#dlg").showModal();
 }
 function closeV(){ $("#stage").innerHTML=""; $("#dlg").close(); }
 $("#vClose").onclick=closeV; $("#dlg").addEventListener("cancel",()=>{$("#stage").innerHTML=""});
@@ -250,7 +258,7 @@ $("#aRen").onclick=async()=>{
 $("#aDel").onclick=async()=>{
   if(!confirm("Pindahkan \""+cur.name+"\" ke tempat sampah Drive?")) return;
   try{ await drive(API+"/"+cur.id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({trashed:true})});
-    const t=$("#t-"+cur.id); if(t) t.remove(); dropCache(cur.id); closeV(); toast("Dipindahkan ke tempat sampah");
+    const t=$("#t-"+cur.id); if(t) t.remove(); dropCache(cur.id); shown=shown.filter(x=>x!==cur); closeV(); toast("Dipindahkan ke tempat sampah");
   }catch(e){ fail(e,"Gagal menghapus") }
 };
 
@@ -431,6 +439,26 @@ function playVideo(f,s){
   v.onerror=()=>{ playIframe(f,s); toast("Pemutar bawaan tidak mendukung video ini, kembali ke pemutar Drive"); };
   s.appendChild(v);
 }
+
+// ---- Geser kiri/kanan (dan tombol panah) untuk pindah foto/video ----
+async function nav(d){
+  const i=shown.indexOf(cur)+d;
+  if(i>=shown.length && !done) await load();
+  if(i<0||i>=shown.length){ toast(d>0?"Sudah item terakhir":"Sudah item pertama"); return; }
+  openItem(shown[i]);
+}
+$("#nPrev").onclick=()=>nav(-1); $("#nNext").onclick=()=>nav(1);
+let sx=0, sy=0, sOK=false;
+$("#dlg").addEventListener("touchstart",e=>{ sOK=e.touches.length===1; if(sOK){ sx=e.touches[0].clientX; sy=e.touches[0].clientY; } },{passive:true});
+$("#dlg").addEventListener("touchend",e=>{
+  if(!sOK) return; sOK=false;
+  const t=e.changedTouches[0], dx=t.clientX-sx, dy=t.clientY-sy;
+  if(Math.abs(dx)>60 && Math.abs(dx)>Math.abs(dy)*1.5) nav(dx<0?1:-1);
+},{passive:true});
+addEventListener("keydown",e=>{
+  if(!$("#dlg").open) return;
+  if(e.key==="ArrowRight") nav(1); else if(e.key==="ArrowLeft") nav(-1);
+});
 </script>
 </body>
 </html>
