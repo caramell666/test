@@ -55,10 +55,32 @@ header>*{max-width:1500px;margin-left:auto;margin-right:auto}
 .seg button{flex:1;padding:.4rem}
 .seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 button:disabled{opacity:.45;cursor:not-allowed}
+.item.sel{outline:3px solid var(--accent);outline-offset:-3px}
+body.selmode .item::before{content:"";position:absolute;top:6px;left:6px;width:22px;height:22px;border-radius:50%;border:2px solid #fff;background:rgba(0,0,0,.35);z-index:2}
+.item.sel::before{display:none}
+.item.sel::after{content:"\2713";position:absolute;top:6px;left:6px;width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-size:.95rem;font-weight:700;z-index:2}
+body.selmode .more{display:none}
+body.selmode main{padding-bottom:5.5rem}
+#selbar{position:fixed;left:0;right:0;bottom:0;z-index:8;background:var(--surface);border-top:1px solid var(--line);padding:.6rem .8rem;padding-bottom:calc(.6rem + env(safe-area-inset-bottom,0px));display:flex;gap:.5rem;align-items:center}
+#selbar span{flex:1;min-width:0}
+dialog#pdlg{width:min(94vw,460px);height:min(82dvh,620px);max-height:94dvh;border-radius:12px}
+.pk{display:flex;flex-direction:column;height:100%}
+.pkTop{display:flex;gap:.6rem;align-items:center;padding:.7rem .8rem;border-bottom:1px solid var(--line)}
+.pkTop>div{min-width:0;flex:1}
+#pkPath{font-size:.8rem;color:var(--muted)}
+#pkList{flex:1;overflow:auto;padding:.3rem}
+.pkRow{display:flex;width:100%;align-items:center;gap:.7rem;border:0;background:transparent;border-radius:8px;text-align:left;padding:.55rem .6rem}
+.pkRow:hover{background:var(--bg)}
+.pkRow svg{width:24px;height:24px;fill:var(--accent);flex:none}
+.pkRow .ell{flex:1;min-width:0}
+.pkRow i{color:var(--muted);font-style:normal}
+.pkEmpty{color:var(--muted);padding:1rem;text-align:center}
+.pkAct{display:flex;gap:.5rem;padding:.7rem .8rem;border-top:1px solid var(--line)}
+#pkOK{flex:1}
 #status{text-align:center;color:var(--muted);padding:1.2rem}
 .hide{display:none!important}
 dialog{border:0;padding:0;background:var(--surface);color:var(--ink);width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;margin:auto;overflow:hidden}
-@media(min-width:900px){dialog:not(#fdlg){width:min(94vw,1300px);height:94vh;max-height:94vh;border-radius:12px}}
+@media(min-width:900px){dialog:not(#fdlg):not(#pdlg){width:min(94vw,1300px);height:94vh;max-height:94vh;border-radius:12px}}
 body:has(dialog[open]){overflow:hidden}
 dialog::backdrop{background:rgba(0,0,0,.7)}
 .v{display:flex;flex-direction:column;height:100%}
@@ -69,8 +91,8 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 .navz{position:absolute;top:20%;bottom:30%;width:38px;z-index:3;border:0;padding:0;min-height:0;background:rgba(0,0,0,.35);color:#fff;font-size:2rem;line-height:1;border-radius:0 12px 12px 0}
 .navz.r{right:0;border-radius:12px 0 0 12px}.navz.l{left:0}
 .v .stage img,.v .stage iframe,.v .stage video{position:absolute;inset:0;width:100%;height:100%;border:0;object-fit:contain}
-.v .acts{display:flex;gap:.5rem;padding:.7rem .8rem;padding-bottom:max(.7rem,env(safe-area-inset-bottom));flex-wrap:wrap}
-.v .acts button{flex:1;white-space:nowrap}
+.v .acts{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:.5rem;padding:.7rem .8rem;padding-bottom:max(.7rem,env(safe-area-inset-bottom))}
+.v .acts button{padding:.5rem .4rem;font-size:.92rem}
 #toast{position:fixed;left:50%;bottom:calc(5.5rem + env(safe-area-inset-bottom,0));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:.6rem 1rem;border-radius:var(--r);z-index:20;max-width:90vw}
 #fab{position:fixed;right:1rem;bottom:calc(1rem + env(safe-area-inset-bottom,0));z-index:6;border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.3);padding:.8rem 1.2rem}
 #prog{position:fixed;left:0;top:0;height:3px;background:var(--accent);width:0;z-index:30;transition:width .2s}
@@ -89,7 +111,8 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <div id="app" class="hide">
   <header>
     <div class="row">
-      <h1>Galeri Drive <small style="font-weight:400;color:var(--muted);font-size:.7rem">v12</small></h1>
+      <h1>Galeri Drive <small style="font-weight:400;color:var(--muted);font-size:.7rem">v13</small></h1>
+      <button id="btnSel">Pilih</button>
       <button id="btnLogout">Keluar</button>
     </div>
     <div class="row" style="margin-top:.6rem">
@@ -125,13 +148,20 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
       <button id="aPlayer" class="hide">Ganti pemutar</button>
       <button id="aOpen">Buka di Drive</button>
       <button id="aDl">Unduh</button>
+      <button id="aMove">Pindahkan</button>
       <button id="aRen">Ganti nama</button>
       <button id="aDel" class="danger">Hapus</button>
     </div>
   </div>
 </dialog>
 
-<dialog id="fdlg"><strong id="fName" style="word-break:break-word"></strong><div class="acts"><button id="fRen">Ganti nama</button><button id="fDel" class="danger">Hapus folder</button><button id="fClose">Tutup</button></div></dialog>
+<dialog id="pdlg"><div class="pk">
+  <div class="pkTop"><button id="pkUp" aria-label="Naik satu level">‹</button><div><strong id="pkTitle">Pindahkan ke...</strong><div id="pkPath" class="ell"></div></div><button id="pkNew">Folder baru</button></div>
+  <div id="pkList"></div>
+  <div class="pkAct"><button id="pkCancel">Batal</button><button id="pkOK" class="primary">Pindahkan ke sini</button></div>
+</div></dialog>
+<div id="selbar" class="hide"><span id="selN">0 dipilih</span><button id="selAll">Semua</button><button id="selMove" class="primary">Pindahkan</button><button id="selDel" class="danger">Hapus</button></div>
+<dialog id="fdlg"><strong id="fName" style="word-break:break-word"></strong><div class="acts"><button id="fRen">Ganti nama</button><button id="fMove">Pindahkan</button><button id="fDel" class="danger">Hapus folder</button><button id="fClose">Tutup</button></div></dialog>
 
 <div id="toast" class="hide" role="status"></div>
 
@@ -146,7 +176,8 @@ const $ = s => document.querySelector(s);
 let token = null, tokenClient = null, filter = "all", term = "", next = null, loading = false, done = false, gen = 0, cur = null, path = [{id:"root",name:"Drive Saya"}], fcur = null;
 const FOLD="application/vnd.google-apps.folder";
 let prefs={sort:"mod_desc",mode:"folder"};
-let flatCache=null, flatReady=false, flatList=[], flatPos=0, shown=[];
+let flatCache=null, flatReady=false, flatList=[], flatPos=0, shown=[], selMode=false;
+const sel=new Map();
 try{ Object.assign(prefs,JSON.parse(localStorage.getItem("prefs")||"{}")) }catch(e){}
 
 function toast(m){const t=$("#toast");t.textContent=m;t.classList.remove("hide");clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.add("hide"),3000)}
@@ -191,7 +222,7 @@ function query(){
   else q += " and '"+here()+"' in parents";
   return q;
 }
-function reset(){ renderCrumbs(); gen++; flatReady=false; shown=[]; next=null; done=false; loading=false; $("#grid").innerHTML=""; $("#status").textContent=""; load(); }
+function reset(){ renderCrumbs(); gen++; flatReady=false; shown=[]; sel.clear(); updBar(); next=null; done=false; loading=false; $("#grid").innerHTML=""; $("#status").textContent=""; load(); }
 async function load(){
   if(loading||done) return;
   if(prefs.mode==="flat") return loadFlat();
@@ -213,7 +244,7 @@ function addTile(f){
   const b=document.createElement("button"); b.className="item"; b.id="t-"+f.id; b.setAttribute("aria-label",f.name);
   const vid=f.mimeType.startsWith("video/");
   b.innerHTML=(f.thumbnailLink?`<img loading="lazy" referrerpolicy="no-referrer" src="${esc(f.thumbnailLink.replace(/=s\d+$/,"=s400"))}" alt="">`:`<span class="nm">${esc(f.name)}</span>`)+(vid?'<span class="tag">Video</span>':"");
-  b.onclick=()=>openItem(f); $("#grid").appendChild(b);
+  b._f=f; b.onclick=()=>selMode?toggleSel(f,b):openItem(f); $("#grid").appendChild(b);
 }
 new IntersectionObserver(e=>{ if(e[0].isIntersecting && token) load(); },{rootMargin:"600px"}).observe($("#sentinel"));
 $("#search").addEventListener("input",()=>{ clearTimeout(reset.t); reset.t=setTimeout(()=>{term=$("#search").value.trim();reset()},400) });
@@ -301,8 +332,8 @@ addEventListener("popstate",()=>{ path=path.slice(0,(history.state&&history.stat
 function addFolder(f){
   const d=document.createElement("div"); d.className="item fold"; d.id="t-"+f.id; d.tabIndex=0; d.setAttribute("role","button"); d.setAttribute("aria-label","Folder "+f.name);
   d.innerHTML=FICON+`<span class="fn">${esc(f.name)}</span><button class="more" aria-label="Opsi folder">\u22EE</button>`;
-  d.onclick=()=>openFolder(f);
-  d.onkeydown=e=>{ if(e.key==="Enter"&&e.target===d) openFolder(f) };
+  d._f=f; d.onclick=()=>selMode?toggleSel(f,d):openFolder(f);
+  d.onkeydown=e=>{ if(e.key==="Enter"&&e.target===d) selMode?toggleSel(f,d):openFolder(f) };
   d.querySelector(".more").onclick=e=>{ e.stopPropagation(); fcur=f; $("#fName").textContent=f.name; const cp=f.capabilities||{}; $("#fRen").disabled=!cp.canRename; $("#fDel").disabled=!cp.canTrash; $("#fdlg").showModal(); };
   $("#grid").appendChild(d);
 }
@@ -459,6 +490,98 @@ addEventListener("keydown",e=>{
   if(!$("#dlg").open) return;
   if(e.key==="ArrowRight") nav(1); else if(e.key==="ArrowLeft") nav(-1);
 });
+
+// ---- Pindahkan file/folder ----
+let rootIdCache=null, pk=null;
+async function rootId(){ if(!rootIdCache) rootIdCache=(await (await drive(API+"/root?fields=id")).json()).id; return rootIdCache; }
+async function pool(arr,n,fn){ let i=0; await Promise.all(Array.from({length:Math.min(n,arr.length)},async()=>{ while(i<arr.length) await fn(arr[i++]); })); }
+function pickFolder(exclude,n){
+  return new Promise(res=>{
+    pk={stack:[{id:"root",name:"Drive Saya"}],exclude:new Set(exclude),res};
+    $("#pkTitle").textContent="Pindahkan "+n+" item ke...";
+    $("#pdlg").showModal(); pkLoad();
+  });
+}
+async function pkLoad(){
+  const my=pk, cur=pk.stack[pk.stack.length-1], box=$("#pkList");
+  $("#pkPath").textContent=pk.stack.map(x=>x.name).join(" \u203A ");
+  $("#pkUp").disabled=pk.stack.length<2;
+  box.innerHTML='<p class="pkEmpty">Memuat...</p>';
+  try{
+    const fs=await listAll("trashed=false and mimeType='"+FOLD+"' and '"+cur.id+"' in parents","id,name");
+    if(pk!==my||my.stack[my.stack.length-1]!==cur) return;
+    const col=new Intl.Collator("id",{numeric:true,sensitivity:"base"});
+    const list=fs.filter(f=>!my.exclude.has(f.id)).sort((a,b)=>col.compare(a.name,b.name));
+    box.innerHTML=list.length?"":'<p class="pkEmpty">Tidak ada subfolder. Pindahkan ke sini, atau buat folder baru.</p>';
+    list.forEach(f=>{
+      const b=document.createElement("button"); b.className="pkRow";
+      b.innerHTML=FICON+'<span class="ell">'+esc(f.name)+'</span><i>\u203A</i>';
+      b.onclick=()=>{ my.stack.push({id:f.id,name:f.name}); pkLoad(); };
+      box.appendChild(b);
+    });
+  }catch(e){ box.innerHTML='<p class="pkEmpty">Gagal memuat folder.</p>'; }
+}
+$("#pkUp").onclick=()=>{ if(pk&&pk.stack.length>1){ pk.stack.pop(); pkLoad(); } };
+$("#pkCancel").onclick=()=>$("#pdlg").close();
+$("#pdlg").addEventListener("close",()=>{ if(pk&&pk.res){ const r=pk.res; pk.res=null; r(null); } });
+$("#pkOK").onclick=()=>{ const r=pk.res, d=pk.stack[pk.stack.length-1].id; pk.res=null; $("#pdlg").close(); r(d); };
+$("#pkNew").onclick=async()=>{
+  const n=prompt("Nama folder baru:"); if(!n||!n.trim()) return;
+  try{ await drive(API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:n.trim(),mimeType:FOLD,parents:[pk.stack[pk.stack.length-1].id]})}); pkLoad(); }
+  catch(e){ fail(e,"Gagal membuat folder"); }
+};
+async function moveItems(items){
+  const d=await pickFolder(items.filter(i=>i.mimeType===FOLD).map(i=>i.id),items.length);
+  if(!d) return 0;
+  const dest=d==="root"?await rootId():d;
+  let ok=0, same=0, bad=0; const moved=new Set();
+  toast("Memindahkan...");
+  await pool(items,5,async f=>{
+    try{
+      const ps=(await (await drive(API+"/"+f.id+"?fields=parents")).json()).parents||[];
+      if(ps.length===1&&ps[0]===dest){ same++; return; }
+      const q=new URLSearchParams({addParents:dest,fields:"id"}), rem=ps.filter(x=>x!==dest);
+      if(rem.length) q.set("removeParents",rem.join(","));
+      await drive(API+"/"+f.id+"?"+q,{method:"PATCH",headers:{"Content-Type":"application/json"},body:"{}"});
+      ok++; moved.add(f.id);
+    }catch(e){ bad++; }
+  });
+  if(ok){
+    flatCache=null;
+    if(prefs.mode!=="flat"){ moved.forEach(id=>{ const t=$("#t-"+id); if(t) t.remove(); }); shown=shown.filter(x=>!moved.has(x.id)); }
+  }
+  toast("Dipindahkan: "+ok+(same?" \u00B7 "+same+" sudah di folder itu":"")+(bad?" \u00B7 "+bad+" gagal (cek izin akses)":""));
+  return ok;
+}
+$("#aMove").onclick=async()=>{ const ok=await moveItems([cur]); if(ok&&prefs.mode!=="flat") closeV(); };
+$("#fMove").onclick=()=>{ $("#fdlg").close(); moveItems([fcur]); };
+
+// ---- Mode pilih banyak ----
+function updBar(){ const n=sel.size; $("#selN").textContent=n+" dipilih"; $("#selMove").disabled=!n; $("#selDel").disabled=!n; }
+function clearSel(){ sel.clear(); document.querySelectorAll("#grid .sel").forEach(e=>e.classList.remove("sel")); updBar(); }
+function setSel(on){
+  selMode=on; document.body.classList.toggle("selmode",on);
+  $("#selbar").classList.toggle("hide",!on); $("#fab").classList.toggle("hide",on);
+  $("#btnSel").textContent=on?"Selesai":"Pilih"; if(!on) clearSel();
+}
+function toggleSel(f,el){ if(sel.has(f.id)){ sel.delete(f.id); el.classList.remove("sel"); } else { sel.set(f.id,f); el.classList.add("sel"); } updBar(); }
+$("#btnSel").onclick=()=>setSel(!selMode);
+$("#selAll").onclick=()=>{ document.querySelectorAll("#grid .item").forEach(el=>{ if(el._f&&!sel.has(el._f.id)){ sel.set(el._f.id,el._f); el.classList.add("sel"); } }); updBar(); };
+$("#selMove").onclick=async()=>{ const ok=await moveItems([...sel.values()]); if(ok) clearSel(); };
+$("#selDel").onclick=async()=>{
+  const items=[...sel.values()];
+  if(!confirm("Pindahkan "+items.length+" item ke tempat sampah Drive?")) return;
+  let ok=0, bad=0, hasFolder=false;
+  await pool(items,5,async f=>{
+    try{
+      await drive(API+"/"+f.id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({trashed:true})});
+      ok++; if(f.mimeType===FOLD) hasFolder=true; else dropCache(f.id);
+      const t=$("#t-"+f.id); if(t) t.remove(); shown=shown.filter(x=>x!==f);
+    }catch(e){ bad++; }
+  });
+  if(hasFolder) flatCache=null;
+  clearSel(); toast("Dihapus: "+ok+(bad?" \u00B7 "+bad+" gagal (cek izin akses)":""));
+};
 </script>
 </body>
 </html>
