@@ -142,7 +142,7 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <div id="app" class="hide">
   <header>
     <div class="row">
-      <h1>Galeri Drive <small style="font-weight:400;color:var(--muted);font-size:.7rem">v16</small></h1>
+      <h1>Galeri Drive <small style="font-weight:400;color:var(--muted);font-size:.7rem">v17</small></h1>
       <button id="btnKeys" class="kbbtn">Pintasan</button>
       <button id="btnSel">Pilih</button>
       <button id="btnLogout">Keluar</button>
@@ -215,7 +215,7 @@ const $ = s => document.querySelector(s);
 let token = null, tokenClient = null, filter = "all", term = "", next = null, loading = false, done = false, gen = 0, cur = null, path = [{id:"root",name:"Drive Saya"}], fcur = null;
 const FOLD="application/vnd.google-apps.folder";
 let prefs={sort:"mod_desc",mode:"folder",view:"grid"};
-let flatCache=null, flatReady=false, flatList=[], flatPos=0, shown=[], selMode=false;
+let flatCache=null, flatReady=false, flatList=[], flatPos=0, shown=[], selMode=false, lastSel=null, lpTimer=null, lpFired=false, lpX=0, lpY=0;
 const sel=new Map();
 try{ Object.assign(prefs,JSON.parse(localStorage.getItem("prefs")||"{}")) }catch(e){}
 
@@ -261,7 +261,7 @@ function query(){
   else q += " and '"+here()+"' in parents";
   return q;
 }
-function reset(){ renderCrumbs(); gen++; flatReady=false; shown=[]; sel.clear(); updBar(); next=null; done=false; loading=false; $("#grid").innerHTML=""; $("#status").textContent=""; load(); }
+function reset(){ renderCrumbs(); gen++; flatReady=false; shown=[]; sel.clear(); lastSel=null; updBar(); next=null; done=false; loading=false; $("#grid").innerHTML=""; $("#status").textContent=""; load(); }
 async function load(){
   if(loading||done) return;
   if(prefs.mode==="flat") return loadFlat();
@@ -283,7 +283,7 @@ function addTile(f){
   const b=document.createElement("button"); b.className="item"; b.id="t-"+f.id; b.setAttribute("aria-label",f.name);
   const vid=f.mimeType.startsWith("video/");
   b.innerHTML='<span class="th">'+(f.thumbnailLink?`<img loading="lazy" referrerpolicy="no-referrer" src="${esc(f.thumbnailLink.replace(/=s\d+$/,"=s400"))}" alt="">`:`<span class="nm">${esc(f.name)}</span>`)+(vid?'<span class="tag">Video</span>':"")+'</span><span class="meta"><b>'+esc(f.name)+'</b><small>'+esc(metaText(f))+'</small></span>';
-  b._f=f; b.onclick=()=>selMode?toggleSel(f,b):openItem(f); $("#grid").appendChild(b);
+  b._f=f; b.onclick=e=>pick(e,f,b,()=>openItem(f)); $("#grid").appendChild(b);
 }
 new IntersectionObserver(e=>{ if(e[0].isIntersecting && token) load(); },{rootMargin:"600px"}).observe($("#sentinel"));
 $("#search").addEventListener("input",()=>{ clearTimeout(reset.t); reset.t=setTimeout(()=>{term=$("#search").value.trim();reset()},400) });
@@ -371,7 +371,7 @@ addEventListener("popstate",()=>{ path=path.slice(0,(history.state&&history.stat
 function addFolder(f){
   const d=document.createElement("div"); d.className="item fold"; d.id="t-"+f.id; d.tabIndex=0; d.setAttribute("role","button"); d.setAttribute("aria-label","Folder "+f.name);
   d.innerHTML=FICON+`<span class="fcol"><span class="fn">${esc(f.name)}</span><small class="fd">Folder${f.modifiedTime?" \u00B7 "+fmtDate(f.modifiedTime):""}</small></span><button class="more" aria-label="Opsi folder">\u22EE</button>`;
-  d._f=f; d.onclick=()=>selMode?toggleSel(f,d):openFolder(f);
+  d._f=f; d.onclick=e=>pick(e,f,d,()=>openFolder(f));
   d.onkeydown=e=>{ if(e.key==="Enter"&&e.target===d) selMode?toggleSel(f,d):openFolder(f) };
   d.querySelector(".more").onclick=e=>{ e.stopPropagation(); fcur=f; $("#fName").textContent=f.name; const cp=f.capabilities||{}; $("#fRen").disabled=!cp.canRename; $("#fDel").disabled=!cp.canTrash; $("#fdlg").showModal(); };
   $("#grid").appendChild(d);
@@ -726,6 +726,29 @@ function askText(title,initial=""){
     setTimeout(()=>{ inp.focus(); const dot=initial.lastIndexOf("."); inp.setSelectionRange(0,dot>0?dot:initial.length); },60);
   });
 }
+
+// ---- Cara memilih banyak item: tahan lama (HP), Ctrl/Shift+klik (PC) ----
+function pick(e,f,el,open){
+  if(!selMode && (e.ctrlKey||e.metaKey||e.shiftKey)) setSel(true);
+  if(!selMode) return open();
+  if(e.shiftKey && lastSel && lastSel!==el && lastSel.isConnected){
+    const all=[...$("#grid").children], a=all.indexOf(lastSel), b=all.indexOf(el);
+    all.slice(Math.min(a,b),Math.max(a,b)+1).forEach(x=>{ if(x._f&&!sel.has(x._f.id)){ sel.set(x._f.id,x._f); x.classList.add("sel"); } });
+    updBar();
+  } else toggleSel(f,el);
+  lastSel=el;
+}
+const gridEl=$("#grid");
+gridEl.addEventListener("pointerdown",e=>{
+  lpFired=false;
+  const el=e.target.closest(".item"); if(!el||!el._f||selMode||e.button>0) return;
+  lpX=e.clientX; lpY=e.clientY; clearTimeout(lpTimer);
+  lpTimer=setTimeout(()=>{ lpFired=true; setSel(true); toggleSel(el._f,el); lastSel=el; if(navigator.vibrate) navigator.vibrate(15); },500);
+});
+gridEl.addEventListener("pointermove",e=>{ if(Math.abs(e.clientX-lpX)+Math.abs(e.clientY-lpY)>10) clearTimeout(lpTimer); });
+["pointerup","pointercancel"].forEach(t=>gridEl.addEventListener(t,()=>clearTimeout(lpTimer)));
+gridEl.addEventListener("click",e=>{ if(lpFired){ e.stopPropagation(); e.preventDefault(); lpFired=false; } },true);
+gridEl.addEventListener("contextmenu",e=>{ if(e.target.closest(".item")) e.preventDefault(); });
 </script>
 </body>
 </html>
