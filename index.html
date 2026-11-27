@@ -106,10 +106,12 @@ dialog#kdlg{width:min(94vw,540px);height:min(88dvh,680px);max-height:94dvh;borde
 .kRow button[data-k]{min-width:120px;font-family:ui-monospace,Consolas,monospace}
 .kRow button.cap{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .kRow .kx{min-width:40px;padding:.3rem}
+dialog#idlg{width:min(92vw,420px);height:auto;max-height:none;padding:1rem;border-radius:12px;margin:10dvh auto auto}
+#iInput{width:100%;min-height:44px;padding:.6rem .8rem;border:1px solid var(--line);border-radius:var(--r);background:var(--bg)}
 #status{text-align:center;color:var(--muted);padding:1.2rem}
 .hide{display:none!important}
 dialog{border:0;padding:0;background:var(--surface);color:var(--ink);width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;margin:auto;overflow:hidden}
-@media(min-width:900px){dialog:not(#fdlg):not(#pdlg):not(#kdlg){width:min(94vw,1300px);height:94vh;max-height:94vh;border-radius:12px}}
+@media(min-width:900px){dialog:not(#fdlg):not(#pdlg):not(#kdlg):not(#idlg){width:min(94vw,1300px);height:94vh;max-height:94vh;border-radius:12px}}
 body:has(dialog[open]){overflow:hidden}
 dialog::backdrop{background:rgba(0,0,0,.7)}
 .v{display:flex;flex-direction:column;height:100%}
@@ -140,7 +142,7 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
 <div id="app" class="hide">
   <header>
     <div class="row">
-      <h1>Galeri Drive <small style="font-weight:400;color:var(--muted);font-size:.7rem">v15</small></h1>
+      <h1>Galeri Drive <small style="font-weight:400;color:var(--muted);font-size:.7rem">v16</small></h1>
       <button id="btnKeys" class="kbbtn">Pintasan</button>
       <button id="btnSel">Pilih</button>
       <button id="btnLogout">Keluar</button>
@@ -186,6 +188,7 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
   </div>
 </dialog>
 
+<dialog id="idlg"><div style="display:grid;gap:.8rem"><strong id="iTitle"></strong><input id="iInput" type="text" autocomplete="off" enterkeyhint="done"><div style="display:flex;gap:.5rem;justify-content:flex-end"><button id="iCancel">Batal</button><button id="iOK" class="primary">OK</button></div></div></dialog>
 <dialog id="kdlg"><div class="pk">
   <div class="pkTop"><div><strong>Pintasan keyboard</strong><div class="ell" style="font-size:.8rem;color:var(--muted)">Klik sebuah tombol, lalu tekan kombinasi yang baru (Esc untuk batal)</div></div><button id="kClose">Tutup</button></div>
   <div id="kList"></div>
@@ -315,7 +318,7 @@ $("#aDl").onclick=async()=>{
 
 // ---- Update: ganti nama ----
 $("#aRen").onclick=async()=>{
-  const n=prompt("Nama baru:",cur.name); if(!n||n===cur.name) return;
+  const n=(await askText("Nama baru",cur.name)||"").trim(); if(!n||n===cur.name) return;
   try{ await drive(API+"/"+cur.id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:n})});
     cur.name=n; $("#vName").textContent=n; const t=$("#t-"+cur.id); if(t) t.setAttribute("aria-label",n); const mb=$("#t-"+cur.id+" .meta b"); if(mb) mb.textContent=n; toast("Nama diganti");
   }catch(e){ fail(e,"Gagal mengganti nama") }
@@ -375,13 +378,13 @@ function addFolder(f){
 }
 $("#btnNew").onclick=async()=>{
   if(here()==="shared") return toast("Buka salah satu folder dulu untuk membuat folder");
-  const n=prompt("Nama folder baru:"); if(!n||!n.trim()) return;
+  const n=(await askText("Nama folder baru")||"").trim(); if(!n) return;
   try{ await drive(API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:n.trim(),mimeType:FOLD,parents:[here()]})}); toast("Folder dibuat"); reset(); }
   catch(e){ fail(e,"Gagal membuat folder") }
 };
 $("#fClose").onclick=()=>$("#fdlg").close();
 $("#fRen").onclick=async()=>{
-  const n=prompt("Nama folder baru:",fcur.name); $("#fdlg").close(); if(!n||n===fcur.name) return;
+  $("#fdlg").close(); const n=(await askText("Nama folder baru",fcur.name)||"").trim(); if(!n||n===fcur.name) return;
   try{ await drive(API+"/"+fcur.id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:n})});
     fcur.name=n; const t=$("#t-"+fcur.id+" .fn"); if(t) t.textContent=n; toast("Nama folder diganti");
   }catch(e){ fail(e,"Gagal mengganti nama") }
@@ -558,7 +561,7 @@ $("#pkCancel").onclick=()=>$("#pdlg").close();
 $("#pdlg").addEventListener("close",()=>{ if(pk&&pk.res){ const r=pk.res; pk.res=null; r(null); } });
 $("#pkOK").onclick=()=>{ const r=pk.res, d=pk.stack[pk.stack.length-1].id; pk.res=null; $("#pdlg").close(); r(d); };
 $("#pkNew").onclick=async()=>{
-  const n=prompt("Nama folder baru:"); if(!n||!n.trim()) return;
+  const n=(await askText("Nama folder baru")||"").trim(); if(!n) return;
   try{ await drive(API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:n.trim(),mimeType:FOLD,parents:[pk.stack[pk.stack.length-1].id]})}); pkLoad(); }
   catch(e){ fail(e,"Gagal membuat folder"); }
 };
@@ -627,7 +630,7 @@ applyView();
 let keys={}, capturing=null;
 try{ keys=JSON.parse(localStorage.getItem("keys")||"{}") }catch(e){}
 async function renameAny(f){
-  const n=prompt("Nama baru:",f.name); if(!n||n===f.name) return;
+  const n=(await askText("Nama baru",f.name)||"").trim(); if(!n||n===f.name) return;
   try{
     await drive(API+"/"+f.id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:n})});
     f.name=n; const t=$("#t-"+f.id);
@@ -698,7 +701,7 @@ addEventListener("keydown",e=>{
     if(moved) toast("Pintasan itu dipindahkan dari \""+moved+"\"");
     return;
   }
-  if(!token||$("#kdlg").open||$("#pdlg").open||$("#fdlg").open) return;
+  if(!token||$("#kdlg").open||$("#pdlg").open||$("#fdlg").open||$("#idlg").open) return;
   const t=e.target; if(t&&(/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)||t.isContentEditable)) return;
   const c=combo(e); if(!c) return;
   const v=$("#dlg").open;
@@ -708,6 +711,21 @@ addEventListener("keydown",e=>{
   if(e.repeat && a.id!=="prev" && a.id!=="next") return;
   a.run();
 },true);
+
+// ---- Kotak isian sendiri (pengganti prompt bawaan browser yang bikin keyboard HP bermasalah) ----
+function askText(title,initial=""){
+  return new Promise(res=>{
+    const d=$("#idlg"), inp=$("#iInput"); let out=null;
+    $("#iTitle").textContent=title; inp.value=initial;
+    const done=v=>{ out=v; inp.blur(); d.close(); };
+    $("#iOK").onclick=()=>done(inp.value);
+    $("#iCancel").onclick=()=>done(null);
+    inp.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); done(inp.value); } };
+    d.onclose=()=>res(out);
+    d.showModal();
+    setTimeout(()=>{ inp.focus(); const dot=initial.lastIndexOf("."); inp.setSelectionRange(0,dot>0?dot:initial.length); },60);
+  });
+}
 </script>
 </body>
 </html>
